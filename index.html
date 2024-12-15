@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Upscaler</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+            background-color: #f4f4f9;
+            color: #333;
+        }
+
+        h1 {
+            font-size: 2rem;
+        }
+
+        input, button, a, select {
+            margin: 10px;
+            padding: 10px;
+            font-size: 1rem;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+
+        button {
+            background-color: #007BFF;
+            color: white;
+            border: none;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        canvas {
+            margin: 20px auto;
+            display: block;
+            border: 1px solid #ccc;
+            max-width: 90%;
+            height: auto;
+        }
+
+        a {
+            background-color: #28a745;
+            color: white;
+            text-decoration: none;
+        }
+
+        a:hover {
+            background-color: #1e7e34;
+        }
+
+        #download {
+            display: none;
+        }
+
+        .menu {
+            display: inline-block;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 10px;
+            background-color: #ffffff;
+            margin: 20px auto;
+            text-align: left;
+        }
+
+        .menu h2 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+
+        .dropdown {
+            margin-bottom: 15px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Photo Upscaler</h1>
+    <input type="file" id="upload" accept="image/*">
+    <div class="menu">
+        <h2>Select Upscale Option:</h2>
+        <div class="dropdown">
+            <label for="resolution">Resolution Presets:</label>
+            <select id="resolution">
+                <option value="1080p">1080p</option>
+                <option value="4k">4K</option>
+                <option value="8k">8K</option>
+            </select>
+            <button id="applyResolution">Apply Resolution</button>
+        </div>
+        <div class="dropdown">
+            <label for="megapixels">Megapixel Presets:</label>
+            <select id="megapixels">
+                <option value="24MP">24MP</option>
+                <option value="50MP">50MP</option>
+                <option value="100MP">100MP</option>
+                <option value="200MP">200MP</option>
+                <option value="400MP">400MP</option>
+                <option value="700MP">700MP</option>
+                <option value="800MP">800MP</option>
+                <option value="900MP">900MP</option>
+                <option value="1000MP">1000MP</option>
+            </select>
+            <button id="applyMegapixels">Apply Megapixels</button>
+        </div>
+    </div>
+    <canvas id="canvas"></canvas>
+    <a id="download" href="#" download="upscaled-image.png">Download Upscaled Image</a>
+
+    <script>
+        const upload = document.getElementById('upload');
+        const applyResolutionButton = document.getElementById('applyResolution');
+        const applyMegapixelsButton = document.getElementById('applyMegapixels');
+        const resolutionSelect = document.getElementById('resolution');
+        const megapixelsSelect = document.getElementById('megapixels');
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const downloadLink = document.getElementById('download');
+
+        let originalImage = null;
+        let currentWidth = 0;
+        let currentHeight = 0;
+
+        const MAX_CANVAS_SIZE = 32768; // Browser canvas size limit (e.g., Chrome)
+
+        // Handle image upload
+        upload.addEventListener('change', (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        originalImage = img;
+                        fitImageToCanvas(img);
+                    };
+                    img.src = e.target.result;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        // Apply megapixels presets
+        applyMegapixelsButton.addEventListener('click', () => {
+            if (!originalImage) {
+                alert('Please upload an image first!');
+                return;
+            }
+
+            const megapixels = megapixelsSelect.value;
+            const megapixelsMap = {
+                "24MP": 24000000,
+                "50MP": 50000000,
+                "100MP": 100000000,
+                "200MP": 200000000,
+                "400MP": 400000000,
+                "700MP": 700000000,
+                "800MP": 800000000,
+                "900MP": 900000000,
+                "1000MP": 1000000000
+            };
+
+            const TARGET_PIXELS = megapixelsMap[megapixels];
+            let scale = Math.sqrt(TARGET_PIXELS / (originalImage.width * originalImage.height));
+            let newWidth = Math.floor(originalImage.width * scale);
+            let newHeight = Math.floor(originalImage.height * scale);
+
+            // Ensure new dimensions are within browser limits
+            if (newWidth > MAX_CANVAS_SIZE || newHeight > MAX_CANVAS_SIZE) {
+                const limitScale = MAX_CANVAS_SIZE / Math.max(newWidth, newHeight);
+                newWidth = Math.floor(newWidth * limitScale);
+                newHeight = Math.floor(newHeight * limitScale);
+                alert("Upscaled dimensions exceed browser limits. Adjusted to fit.");
+            }
+
+            currentWidth = newWidth;
+            currentHeight = newHeight;
+
+            upscaleCanvas();
+        });
+
+        // Core function to upscale the canvas
+        function upscaleCanvas() {
+            if (currentWidth === 0 || currentHeight === 0) {
+                return;
+            }
+
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+
+            tempCanvas.width = currentWidth;
+            tempCanvas.height = currentHeight;
+
+            tempCtx.imageSmoothingEnabled = true;
+            tempCtx.imageSmoothingQuality = 'high';
+
+            tempCtx.drawImage(originalImage, 0, 0, currentWidth, currentHeight);
+
+            canvas.width = currentWidth;
+            canvas.height = currentHeight;
+            ctx.drawImage(tempCanvas, 0, 0);
+
+            downloadLink.style.display = 'block';
+            downloadLink.href = canvas.toDataURL('image/png');
+        }
+
+        // Fit the uploaded image to the canvas for preview
+        function fitImageToCanvas(img) {
+            const maxWidth = 800; // Set a fixed display width
+            const scale = maxWidth / img.width;
+
+            canvas.width = maxWidth;
+            canvas.height = img.height * scale;
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        }
+    </script>
+</body>
+</html>
